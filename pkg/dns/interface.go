@@ -22,14 +22,24 @@ type AliyunDnsProvider interface {
 	SetAliyunRecordStatus(recordId, status string) error
 }
 
+// VolcengineDnsProvider 火山引擎DNS服务提供商接口
+type VolcengineDnsProvider interface {
+	GetVolcengineRecordList(zoneId, rrKeyWord string) ([]VolcengineDnsRecord, error)
+	CreateVolcengineRecord(zoneId, rr, recordType, value string, ttl int64) (*VolcengineDnsRecord, error)
+	UpdateVolcengineRecord(recordId, rr, recordType, value string, ttl int64) (*VolcengineDnsRecord, error)
+	DeleteVolcengineRecord(recordId string) error
+	SetVolcengineRecordStatus(recordId, status string) error
+}
+
 // DnsManager 统一DNS管理器
 type DnsManager struct {
-	dnsPodClient    *DnsPodClient
-	aliyunDnsClient *AliyunDnsClient
+	dnsPodClient        *DnsPodClient
+	aliyunDnsClient     *AliyunDnsClient
+	volcengineDnsClient *VolcengineDnsClient
 }
 
 // NewDnsManager 创建DNS管理器
-func NewDnsManager(dnsPodToken, aliyunAccessKeyId, aliyunAccessKeySecret, aliyunRegionId string) *DnsManager {
+func NewDnsManager(dnsPodToken, aliyunAccessKeyId, aliyunAccessKeySecret, aliyunRegionId, volcengineAccessKeyId, volcengineAccessKeySecret, volcengineRegion string) *DnsManager {
 	manager := &DnsManager{}
 
 	if dnsPodToken != "" {
@@ -38,6 +48,10 @@ func NewDnsManager(dnsPodToken, aliyunAccessKeyId, aliyunAccessKeySecret, aliyun
 
 	if aliyunAccessKeyId != "" && aliyunAccessKeySecret != "" {
 		manager.aliyunDnsClient = NewAliyunDnsClient(aliyunAccessKeyId, aliyunAccessKeySecret, aliyunRegionId)
+	}
+
+	if volcengineAccessKeyId != "" && volcengineAccessKeySecret != "" {
+		manager.volcengineDnsClient = NewVolcengineDnsClient(volcengineAccessKeyId, volcengineAccessKeySecret, volcengineRegion)
 	}
 
 	return manager
@@ -51,6 +65,11 @@ func (m *DnsManager) UseDnsPod() bool {
 // 使用阿里云DNS
 func (m *DnsManager) UseAliyunDns() bool {
 	return m.aliyunDnsClient != nil
+}
+
+// 使用火山引擎DNS
+func (m *DnsManager) UseVolcengineDns() bool {
+	return m.volcengineDnsClient != nil
 }
 
 // GetDnsPodDomainList 获取DNSPod域名列表
@@ -91,6 +110,54 @@ func (m *DnsManager) DeleteDnsPodRecord(recordID, domainID string) error {
 		return fmt.Errorf("DNSPod客户端未初始化")
 	}
 	return m.dnsPodClient.DeleteRecord(recordID, domainID)
+}
+
+// GetVolcengineDomainList 获取火山引擎域名列表
+func (m *DnsManager) GetVolcengineDomainList(rrKeyWord string) ([]VolcengineDomain, error) {
+	if m.volcengineDnsClient == nil {
+		return nil, fmt.Errorf("火山引擎DNS客户端未初始化")
+	}
+	return m.volcengineDnsClient.GetVolcengineDomainList(rrKeyWord)
+}
+
+// GetVolcengineRecordList 获取火山引擎DNS记录列表
+func (m *DnsManager) GetVolcengineRecordList(zoneId, rrKeyWord string) ([]VolcengineDnsRecord, error) {
+	if m.volcengineDnsClient == nil {
+		return nil, fmt.Errorf("火山引擎DNS客户端未初始化")
+	}
+	return m.volcengineDnsClient.GetVolcengineRecordList(zoneId, rrKeyWord)
+}
+
+// CreateVolcengineRecord 创建火山引擎DNS记录
+func (m *DnsManager) CreateVolcengineRecord(zoneId, rr, recordType, value string, ttl int64) (*VolcengineDnsRecord, error) {
+	if m.volcengineDnsClient == nil {
+		return nil, fmt.Errorf("火山引擎DNS客户端未初始化")
+	}
+	return m.volcengineDnsClient.CreateVolcengineRecord(zoneId, rr, recordType, value, ttl)
+}
+
+// UpdateVolcengineRecord 更新火山引擎DNS记录
+func (m *DnsManager) UpdateVolcengineRecord(recordId, rr, recordType, value string, ttl int64) (*VolcengineDnsRecord, error) {
+	if m.volcengineDnsClient == nil {
+		return nil, fmt.Errorf("火山引擎DNS客户端未初始化")
+	}
+	return m.volcengineDnsClient.UpdateVolcengineRecord(recordId, rr, recordType, value, ttl)
+}
+
+// DeleteVolcengineRecord 删除火山引擎DNS记录
+func (m *DnsManager) DeleteVolcengineRecord(recordId string) error {
+	if m.volcengineDnsClient == nil {
+		return fmt.Errorf("火山引擎DNS客户端未初始化")
+	}
+	return m.volcengineDnsClient.DeleteVolcengineRecord(recordId)
+}
+
+// SetVolcengineRecordStatus 设置火山引擎DNS记录状态
+func (m *DnsManager) SetVolcengineRecordStatus(recordId, status string) error {
+	if m.volcengineDnsClient == nil {
+		return fmt.Errorf("火山引擎DNS客户端未初始化")
+	}
+	return m.volcengineDnsClient.SetVolcengineRecordStatus(recordId, status)
 }
 
 // SetDnsPodRecordStatus 设置DNSPod记录状态

@@ -32,6 +32,15 @@ func BatchCreateDnsRecords(c *gin.Context) {
 		return
 	}
 
+	if provider == "volcengine" && (setting.VolcengineAccessKeyId == "" || setting.VolcengineAccessKeySecret == "") {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": e.ERROR,
+			"msg":  "火山引擎AccessKey未配置",
+			"data": make(map[string]interface{}),
+		})
+		return
+	}
+
 	// 从请求体获取批量数据
 	var records []struct {
 		DomainID string `json:"domain_id"`
@@ -74,47 +83,30 @@ func BatchCreateDnsRecords(c *gin.Context) {
 			continue
 		}
 
-		var result map[string]interface{}
+		// 使用策略模式处理不同类型提供商
+		ttl := record.TTL
+		if ttl == 0 {
+			ttl = 600 // 默认TTL
+		}
 
-		if provider == "aliyun" && dnsService.Manager.UseAliyunDns() {
-			// 使用阿里云DNS
-			ttl := record.TTL
-			if ttl == 0 {
-				ttl = 600 // 默认TTL
-			}
-			aliyunRecord, err := dnsService.CreateAliyunRecord(record.DomainID, record.Name, record.Type, record.Value, ttl)
-			if err != nil {
-				result = map[string]interface{}{
-					"success": false,
-					"error":   err.Error(),
-					"name":    record.Name,
-				}
-			} else {
-				result = map[string]interface{}{
-					"success": true,
-					"data":    aliyunRecord,
-					"name":    record.Name,
-				}
+		var result map[string]interface{}
+		line := record.Line
+		if line == "" {
+			line = "默认"
+		}
+
+		recordResult, err := dnsService.CreateRecord(record.DomainID, record.Name, record.Type, record.Value, line, provider)
+		if err != nil {
+			result = map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+				"name":    record.Name,
 			}
 		} else {
-			// 使用DNSPod (默认)
-			line := record.Line
-			if line == "" {
-				line = "默认"
-			}
-			dnsPodRecord, err := dnsService.CreateRecord(record.DomainID, record.Name, record.Type, record.Value, line, provider)
-			if err != nil {
-				result = map[string]interface{}{
-					"success": false,
-					"error":   err.Error(),
-					"name":    record.Name,
-				}
-			} else {
-				result = map[string]interface{}{
-					"success": true,
-					"data":    dnsPodRecord,
-					"name":    record.Name,
-				}
+			result = map[string]interface{}{
+				"success": true,
+				"data":    recordResult,
+				"name":    record.Name,
 			}
 		}
 
@@ -150,6 +142,15 @@ func BatchUpdateDnsRecords(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
 			"msg":  "阿里云AccessKey未配置",
+			"data": make(map[string]interface{}),
+		})
+		return
+	}
+
+	if provider == "volcengine" && (setting.VolcengineAccessKeyId == "" || setting.VolcengineAccessKeySecret == "") {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": e.ERROR,
+			"msg":  "火山引擎AccessKey未配置",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -198,47 +199,30 @@ func BatchUpdateDnsRecords(c *gin.Context) {
 			continue
 		}
 
-		var result map[string]interface{}
+		// 使用策略模式处理不同类型提供商
+		ttl := update.TTL
+		if ttl == 0 {
+			ttl = 600 // 默认TTL
+		}
 
-		if provider == "aliyun" && dnsService.Manager.UseAliyunDns() {
-			// 使用阿里云DNS
-			ttl := update.TTL
-			if ttl == 0 {
-				ttl = 600 // 默认TTL
-			}
-			aliyunRecord, err := dnsService.UpdateAliyunRecord(update.ID, update.Name, update.Type, update.Value, ttl)
-			if err != nil {
-				result = map[string]interface{}{
-					"success": false,
-					"error":   err.Error(),
-					"id":      update.ID,
-				}
-			} else {
-				result = map[string]interface{}{
-					"success": true,
-					"data":    aliyunRecord,
-					"id":      update.ID,
-				}
+		var result map[string]interface{}
+		line := update.Line
+		if line == "" {
+			line = "默认"
+		}
+
+		recordResult, err := dnsService.UpdateRecord(update.ID, update.DomainID, update.Name, update.Type, update.Value, line, provider)
+		if err != nil {
+			result = map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+				"id":      update.ID,
 			}
 		} else {
-			// 使用DNSPod (默认)
-			line := update.Line
-			if line == "" {
-				line = "默认"
-			}
-			dnsPodRecord, err := dnsService.UpdateRecord(update.ID, update.DomainID, update.Name, update.Type, update.Value, line, provider)
-			if err != nil {
-				result = map[string]interface{}{
-					"success": false,
-					"error":   err.Error(),
-					"id":      update.ID,
-				}
-			} else {
-				result = map[string]interface{}{
-					"success": true,
-					"data":    dnsPodRecord,
-					"id":      update.ID,
-				}
+			result = map[string]interface{}{
+				"success": true,
+				"data":    recordResult,
+				"id":      update.ID,
 			}
 		}
 
@@ -274,6 +258,15 @@ func BatchDeleteDnsRecords(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
 			"msg":  "阿里云AccessKey未配置",
+			"data": make(map[string]interface{}),
+		})
+		return
+	}
+
+	if provider == "volcengine" && (setting.VolcengineAccessKeyId == "" || setting.VolcengineAccessKeySecret == "") {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": e.ERROR,
+			"msg":  "火山引擎AccessKey未配置",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -316,37 +309,19 @@ func BatchDeleteDnsRecords(c *gin.Context) {
 			continue
 		}
 
+		// 使用策略模式处理不同类型提供商
+		err := dnsService.DeleteRecord(delete.ID, delete.DomainID, provider)
 		var result map[string]interface{}
-
-		if provider == "aliyun" && dnsService.Manager.UseAliyunDns() {
-			// 使用阿里云DNS
-			err := dnsService.DeleteAliyunRecord(delete.ID)
-			if err != nil {
-				result = map[string]interface{}{
-					"success": false,
-					"error":   err.Error(),
-					"id":      delete.ID,
-				}
-			} else {
-				result = map[string]interface{}{
-					"success": true,
-					"id":      delete.ID,
-				}
+		if err != nil {
+			result = map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+				"id":      delete.ID,
 			}
 		} else {
-			// 使用DNSPod (默认)
-			err := dnsService.DeleteRecord(delete.ID, delete.DomainID, provider)
-			if err != nil {
-				result = map[string]interface{}{
-					"success": false,
-					"error":   err.Error(),
-					"id":      delete.ID,
-				}
-			} else {
-				result = map[string]interface{}{
-					"success": true,
-					"id":      delete.ID,
-				}
+			result = map[string]interface{}{
+				"success": true,
+				"id":      delete.ID,
 			}
 		}
 
@@ -397,6 +372,15 @@ func BatchUpdateDnsRecordStatus(c *gin.Context) {
 		return
 	}
 
+	if provider == "volcengine" && (setting.VolcengineAccessKeyId == "" || setting.VolcengineAccessKeySecret == "") {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": e.ERROR,
+			"msg":  "火山引擎AccessKey未配置",
+			"data": make(map[string]interface{}),
+		})
+		return
+	}
+
 	// 从请求体获取批量数据
 	var statusUpdates []struct {
 		ID       string `json:"id"`
@@ -434,41 +418,19 @@ func BatchUpdateDnsRecordStatus(c *gin.Context) {
 			continue
 		}
 
+		// 使用策略模式处理不同类型提供商
+		err := dnsService.SetRecordStatus(update.ID, update.DomainID, status, provider)
 		var result map[string]interface{}
-
-		if provider == "aliyun" && dnsService.Manager.UseAliyunDns() {
-			// 使用阿里云DNS，需要转换状态
-			aliyunStatus := "ENABLE"
-			if status == "disable" {
-				aliyunStatus = "DISABLE"
-			}
-			err := dnsService.SetAliyunRecordStatus(update.ID, aliyunStatus)
-			if err != nil {
-				result = map[string]interface{}{
-					"success": false,
-					"error":   err.Error(),
-					"id":      update.ID,
-				}
-			} else {
-				result = map[string]interface{}{
-					"success": true,
-					"id":      update.ID,
-				}
+		if err != nil {
+			result = map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+				"id":      update.ID,
 			}
 		} else {
-			// 使用DNSPod (默认)
-			err := dnsService.SetRecordStatus(update.ID, update.DomainID, status, provider)
-			if err != nil {
-				result = map[string]interface{}{
-					"success": false,
-					"error":   err.Error(),
-					"id":      update.ID,
-				}
-			} else {
-				result = map[string]interface{}{
-					"success": true,
-					"id":      update.ID,
-				}
+			result = map[string]interface{}{
+				"success": true,
+				"id":      update.ID,
 			}
 		}
 

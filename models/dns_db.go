@@ -8,7 +8,7 @@ import (
 type DnsDomain struct {
 	ID         int        `gorm:"primary_key" json:"id"`
 	Name       string     `gorm:"column:name;size:255;not null" json:"name"`
-	Provider   string     `gorm:"column:provider;size:50;not null" json:"provider"` // dns_pod, aliyun
+	Provider   string     `gorm:"column:provider;size:50;not null" json:"provider"` // dns_pod, aliyun, volcengine
 	DomainID   string     `gorm:"column:domain_id;size:100" json:"domain_id"`       // 云服务商的域名ID
 	Status     string     `gorm:"column:status;size:20" json:"status"`              // active, inactive
 	Grade      string     `gorm:"column:grade;size:50" json:"grade"`                // 域名等级
@@ -30,7 +30,7 @@ type DnsRecord struct {
 	Line       string     `gorm:"column:line;size:50" json:"line"`                  // 线路
 	TTL        int        `gorm:"column:ttl;default:600" json:"ttl"`                // TTL值
 	Remark     string     `gorm:"column:remark;type:text" json:"remark"`            // 备注
-	Provider   string     `gorm:"column:provider;size:50;not null" json:"provider"` // dns_pod, aliyun
+	Provider   string     `gorm:"column:provider;size:50;not null" json:"provider"` // dns_pod, aliyun, volcengine
 	RemoteID   string     `gorm:"column:remote_id;size:100" json:"remote_id"`       // 云服务商的记录ID
 	CreatedOn  time.Time  `json:"created_on"`
 	ModifiedOn time.Time  `json:"modified_on"`

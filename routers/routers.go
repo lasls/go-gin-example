@@ -31,6 +31,10 @@ func InitRouter() *gin.Engine {
 		apiV1.DELETE("/dns/records/:id", v1.DeleteDnsRecord)
 		apiV1.PUT("/dns/records/:id/status", v1.SetDnsRecordStatus)
 
+		// 域名验证API路由
+		apiV1.POST("/dns/verification/challenge", v1.GenerateDomainVerificationChallenge)
+		apiV1.POST("/dns/verification/verify", v1.VerifyDomain)
+
 		// DNS数据库API路由
 		apiV1.GET("/dns/domains", v1.GetDnsDomains)
 		apiV1.POST("/dns/domains", v1.AddDnsDomain)

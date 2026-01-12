@@ -27,6 +27,11 @@ var (
 	AliyunAccessKeyId     string
 	AliyunAccessKeySecret string
 	AliyunRegionId        string
+
+	// 火山引擎DNS配置
+	VolcengineAccessKeyId     string
+	VolcengineAccessKeySecret string
+	VolcengineRegionId        string
 )
 
 func init() {
@@ -41,6 +46,7 @@ func init() {
 	LoadApp()
 	LoadDns()
 	LoadAliyunDns()
+	LoadVolcengineDns()
 }
 
 func LoadBase() {
@@ -87,4 +93,15 @@ func LoadAliyunDns() {
 	AliyunAccessKeyId = sec.Key("ALIYUN_ACCESS_KEY_ID").MustString("")
 	AliyunAccessKeySecret = sec.Key("ALIYUN_ACCESS_KEY_SECRET").MustString("")
 	AliyunRegionId = sec.Key("ALIYUN_REGION_ID").MustString("cn-hangzhou")
+}
+
+func LoadVolcengineDns() {
+	sec, err := Cfg.GetSection("volcengine_dns")
+	if err != nil {
+		log.Fatalf("Fail to get section 'volcengine_dns': %v", err)
+	}
+
+	VolcengineAccessKeyId = sec.Key("VOLCENGINE_ACCESS_KEY_ID").MustString("")
+	VolcengineAccessKeySecret = sec.Key("VOLCENGINE_ACCESS_KEY_SECRET").MustString("")
+	VolcengineRegionId = sec.Key("VOLCENGINE_REGION_ID").MustString("cn-north-1")
 }

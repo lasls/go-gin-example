@@ -17,6 +17,9 @@ func NewDnsService() *DnsService {
 		setting.AliyunAccessKeyId,
 		setting.AliyunAccessKeySecret,
 		setting.AliyunRegionId,
+		setting.VolcengineAccessKeyId,
+		setting.VolcengineAccessKeySecret,
+		setting.VolcengineRegionId,
 	)
 	return &DnsService{
 		Manager: manager,
@@ -24,74 +27,43 @@ func NewDnsService() *DnsService {
 }
 
 // GetDomainList 获取域名列表
-func (s *DnsService) GetDomainList() ([]dns.DnsDomain, error) {
-	// 如果配置了DNSPod，优先使用DNSPod
-	if s.Manager.UseDnsPod() {
-		return s.Manager.GetDnsPodDomainList()
-	}
-	// 否则尝试使用阿里云DNS
-	return nil, nil // 阿里云域名列表需要单独处理
+func (s *DnsService) GetDomainList(provider string) ([]interface{}, error) {
+	strategy := GetStrategy(provider)
+	return strategy.GetDomainList(s.Manager)
 }
 
 // GetRecordList 获取DNS记录列表
 func (s *DnsService) GetRecordList(domain, subDomain string, provider string) (interface{}, error) {
-	if provider == "aliyun" && s.Manager.UseAliyunDns() {
-		return s.Manager.GetAliyunRecordList(domain, subDomain)
-	}
-	// 默认使用DNSPod
-	if s.Manager.UseDnsPod() {
-		return s.Manager.GetDnsPodRecordList(domain, subDomain)
-	}
-	return nil, nil
+	strategy := GetStrategy(provider)
+	return strategy.GetRecordList(s.Manager, domain, subDomain)
 }
 
 // CreateRecord 创建DNS记录
 func (s *DnsService) CreateRecord(domainID, subDomain, recordType, value, recordLine string, provider string) (interface{}, error) {
-	if provider == "aliyun" && s.Manager.UseAliyunDns() {
-		// 对于阿里云，domainID是域名名称，subDomain是RR值
-		return s.Manager.CreateAliyunRecord(domainID, subDomain, recordType, value, 600) // 默认TTL为600
-	}
-	// 默认使用DNSPod
-	if s.Manager.UseDnsPod() {
-		return s.Manager.CreateDnsPodRecord(domainID, subDomain, recordType, value, recordLine)
-	}
-	return nil, nil
+	// 默认TTL为600
+	ttl := int64(600)
+	strategy := GetStrategy(provider)
+	return strategy.CreateRecord(s.Manager, domainID, subDomain, recordType, value, recordLine, ttl)
 }
 
 // UpdateRecord 更新DNS记录
 func (s *DnsService) UpdateRecord(recordID, domainID, subDomain, recordType, value, recordLine string, provider string) (interface{}, error) {
-	if provider == "aliyun" && s.Manager.UseAliyunDns() {
-		return s.Manager.UpdateAliyunRecord(recordID, subDomain, recordType, value, 600) // 默认TTL为600
-	}
-	// 默认使用DNSPod
-	if s.Manager.UseDnsPod() {
-		return s.Manager.UpdateDnsPodRecord(recordID, domainID, subDomain, recordType, value, recordLine)
-	}
-	return nil, nil
+	// 默认TTL为600
+	ttl := int64(600)
+	strategy := GetStrategy(provider)
+	return strategy.UpdateRecord(s.Manager, recordID, domainID, subDomain, recordType, value, recordLine, ttl)
 }
 
 // DeleteRecord 删除DNS记录
 func (s *DnsService) DeleteRecord(recordID, domainID string, provider string) error {
-	if provider == "aliyun" && s.Manager.UseAliyunDns() {
-		return s.Manager.DeleteAliyunRecord(recordID)
-	}
-	// 默认使用DNSPod
-	if s.Manager.UseDnsPod() {
-		return s.Manager.DeleteDnsPodRecord(recordID, domainID)
-	}
-	return nil
+	strategy := GetStrategy(provider)
+	return strategy.DeleteRecord(s.Manager, recordID, domainID)
 }
 
 // SetRecordStatus 设置记录状态
 func (s *DnsService) SetRecordStatus(recordID, domainID, status string, provider string) error {
-	if provider == "aliyun" && s.Manager.UseAliyunDns() {
-		return s.Manager.SetAliyunRecordStatus(recordID, status)
-	}
-	// 默认使用DNSPod
-	if s.Manager.UseDnsPod() {
-		return s.Manager.SetDnsPodRecordStatus(recordID, domainID, status)
-	}
-	return nil
+	strategy := GetStrategy(provider)
+	return strategy.SetRecordStatus(s.Manager, recordID, domainID, status)
 }
 
 // GetAliyunRecordList 获取阿里云DNS记录列表

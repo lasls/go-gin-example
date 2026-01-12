@@ -1,22 +1,22 @@
 package v1
 
 import (
-	"net/http"
-	"strconv"
-
 	"github.com/EDDYCJY/go-gin-example/models"
+	"github.com/EDDYCJY/go-gin-example/pkg/dns"
 	"github.com/EDDYCJY/go-gin-example/pkg/e"
 	"github.com/EDDYCJY/go-gin-example/pkg/setting"
 	"github.com/gin-gonic/gin"
+	"net/http"
+	"strconv"
 )
 
 // 获取域名列表
 func GetDomains(c *gin.Context) {
 	// 检查配置中的Token是否设置
-	if setting.DnsPodToken == "" && setting.AliyunAccessKeyId == "" {
+	if !isAnyDnsProviderConfigured() {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
-			"msg":  "DNSPod Token或阿里云AccessKey未配置",
+			"msg":  "DNSPod Token、阿里云AccessKey或火山引擎AccessKey未配置",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -26,43 +26,9 @@ func GetDomains(c *gin.Context) {
 
 	// 检查使用哪个提供商
 	provider := c.Query("provider")
-	if provider == "aliyun" && dnsService.Manager.UseAliyunDns() {
-		// 阿里云域名列表需要特殊处理
-		pageNumber := 1
-		pageSize := 20
-		if pageStr := c.Query("page"); pageStr != "" {
-			if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-				pageNumber = p
-			}
-		}
-		if sizeStr := c.Query("size"); sizeStr != "" {
-			if s, err := strconv.Atoi(sizeStr); err == nil && s > 0 {
-				pageSize = s
-			}
-		}
 
-		// 使用阿里云DNS获取域名列表
-		_, err := dnsService.Manager.GetAliyunDomainList(pageNumber, pageSize)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": e.ERROR,
-				"msg":  err.Error(),
-				"data": make(map[string]interface{}),
-			})
-			return
-		}
-
-		// 暂时返回空列表，因为阿里云域名结构与DNSPod不同
-		c.JSON(http.StatusOK, gin.H{
-			"code": e.SUCCESS,
-			"msg":  "success",
-			"data": make([]interface{}, 0),
-		})
-		return
-	}
-
-	// 使用DNSPod
-	domains, err := dnsService.GetDomainList()
+	// 使用通用域名列表方法
+	domains, err := dnsService.GetDomainList(provider)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
@@ -82,10 +48,10 @@ func GetDomains(c *gin.Context) {
 // 获取DNS记录列表
 func GetDnsRecords(c *gin.Context) {
 	// 检查配置中的Token是否设置
-	if setting.DnsPodToken == "" && setting.AliyunAccessKeyId == "" {
+	if !isAnyDnsProviderConfigured() {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
-			"msg":  "DNSPod Token或阿里云AccessKey未配置",
+			"msg":  "DNSPod Token、阿里云AccessKey或火山引擎AccessKey未配置",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -109,27 +75,7 @@ func GetDnsRecords(c *gin.Context) {
 
 	dnsService := models.NewDnsService()
 
-	if provider == "aliyun" && dnsService.Manager.UseAliyunDns() {
-		// 使用阿里云DNS
-		records, err := dnsService.GetAliyunRecordList(domain, subDomain)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": e.ERROR,
-				"msg":  err.Error(),
-				"data": make(map[string]interface{}),
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"code": e.SUCCESS,
-			"msg":  "success",
-			"data": records,
-		})
-		return
-	}
-
-	// 使用DNSPod
+	// 使用通用记录列表方法
 	records, err := dnsService.GetRecordList(domain, subDomain, provider)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -150,10 +96,10 @@ func GetDnsRecords(c *gin.Context) {
 // 创建DNS记录
 func CreateDnsRecord(c *gin.Context) {
 	// 检查配置中的Token是否设置
-	if setting.DnsPodToken == "" && setting.AliyunAccessKeyId == "" {
+	if !isAnyDnsProviderConfigured() {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
-			"msg":  "DNSPod Token或阿里云AccessKey未配置",
+			"msg":  "DNSPod Token、阿里云AccessKey或火山引擎AccessKey未配置",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -167,8 +113,14 @@ func CreateDnsRecord(c *gin.Context) {
 	recordLine := c.DefaultQuery("record_line", "默认")
 	ttlStr := c.DefaultQuery("ttl", "600")
 	ttl, err := strconv.ParseInt(ttlStr, 10, 64)
-	if err != nil {
+	if err != nil || ttl <= 0 {
 		ttl = 600 // 默认TTL
+	}
+	// 确保TTL在合理范围内 (1秒到2147483647秒)
+	if ttl < 1 {
+		ttl = 1
+	} else if ttl > 2147483647 {
+		ttl = 2147483647
 	}
 
 	if domainID == "" || subDomain == "" || recordType == "" || value == "" {
@@ -182,27 +134,7 @@ func CreateDnsRecord(c *gin.Context) {
 
 	dnsService := models.NewDnsService()
 
-	if provider == "aliyun" && dnsService.Manager.UseAliyunDns() {
-		// 使用阿里云DNS
-		record, err := dnsService.CreateAliyunRecord(domainID, subDomain, recordType, value, ttl)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": e.ERROR,
-				"msg":  err.Error(),
-				"data": make(map[string]interface{}),
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"code": e.SUCCESS,
-			"msg":  "阿里云DNS记录创建成功",
-			"data": record,
-		})
-		return
-	}
-
-	// 使用DNSPod
+	// 使用通用创建记录方法
 	record, err := dnsService.CreateRecord(domainID, subDomain, recordType, value, recordLine, provider)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -223,10 +155,10 @@ func CreateDnsRecord(c *gin.Context) {
 // 更新DNS记录
 func UpdateDnsRecord(c *gin.Context) {
 	// 检查配置中的Token是否设置
-	if setting.DnsPodToken == "" && setting.AliyunAccessKeyId == "" {
+	if !isAnyDnsProviderConfigured() {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
-			"msg":  "DNSPod Token或阿里云AccessKey未配置",
+			"msg":  "DNSPod Token、阿里云AccessKey或火山引擎AccessKey未配置",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -241,8 +173,14 @@ func UpdateDnsRecord(c *gin.Context) {
 	recordLine := c.DefaultQuery("record_line", "默认")
 	ttlStr := c.DefaultQuery("ttl", "600")
 	ttl, err := strconv.ParseInt(ttlStr, 10, 64)
-	if err != nil {
+	if err != nil || ttl <= 0 {
 		ttl = 600 // 默认TTL
+	}
+	// 确保TTL在合理范围内 (1秒到2147483647秒)
+	if ttl < 1 {
+		ttl = 1
+	} else if ttl > 2147483647 {
+		ttl = 2147483647
 	}
 
 	if recordID == "" || domainID == "" || subDomain == "" || recordType == "" || value == "" {
@@ -256,27 +194,7 @@ func UpdateDnsRecord(c *gin.Context) {
 
 	dnsService := models.NewDnsService()
 
-	if provider == "aliyun" && dnsService.Manager.UseAliyunDns() {
-		// 使用阿里云DNS
-		record, err := dnsService.UpdateAliyunRecord(recordID, subDomain, recordType, value, ttl)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": e.ERROR,
-				"msg":  err.Error(),
-				"data": make(map[string]interface{}),
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"code": e.SUCCESS,
-			"msg":  "阿里云DNS记录更新成功",
-			"data": record,
-		})
-		return
-	}
-
-	// 使用DNSPod
+	// 使用通用更新记录方法
 	record, err := dnsService.UpdateRecord(recordID, domainID, subDomain, recordType, value, recordLine, provider)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -297,10 +215,10 @@ func UpdateDnsRecord(c *gin.Context) {
 // 删除DNS记录
 func DeleteDnsRecord(c *gin.Context) {
 	// 检查配置中的Token是否设置
-	if setting.DnsPodToken == "" && setting.AliyunAccessKeyId == "" {
+	if !isAnyDnsProviderConfigured() {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
-			"msg":  "DNSPod Token或阿里云AccessKey未配置",
+			"msg":  "DNSPod Token、阿里云AccessKey或火山引擎AccessKey未配置",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -321,27 +239,7 @@ func DeleteDnsRecord(c *gin.Context) {
 
 	dnsService := models.NewDnsService()
 
-	if provider == "aliyun" && dnsService.Manager.UseAliyunDns() {
-		// 使用阿里云DNS
-		err := dnsService.DeleteAliyunRecord(recordID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": e.ERROR,
-				"msg":  err.Error(),
-				"data": make(map[string]interface{}),
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"code": e.SUCCESS,
-			"msg":  "阿里云DNS记录删除成功",
-			"data": make(map[string]interface{}),
-		})
-		return
-	}
-
-	// 使用DNSPod
+	// 使用通用删除记录方法
 	err := dnsService.DeleteRecord(recordID, domainID, provider)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -362,10 +260,10 @@ func DeleteDnsRecord(c *gin.Context) {
 // 设置DNS记录状态
 func SetDnsRecordStatus(c *gin.Context) {
 	// 检查配置中的Token是否设置
-	if setting.DnsPodToken == "" && setting.AliyunAccessKeyId == "" {
+	if !isAnyDnsProviderConfigured() {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
-			"msg":  "DNSPod Token或阿里云AccessKey未配置",
+			"msg":  "DNSPod Token、阿里云AccessKey或火山引擎AccessKey未配置",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -397,32 +295,7 @@ func SetDnsRecordStatus(c *gin.Context) {
 
 	dnsService := models.NewDnsService()
 
-	if provider == "aliyun" && dnsService.Manager.UseAliyunDns() {
-		// 使用阿里云DNS，需要转换状态
-		aliyunStatus := "ENABLE"
-		if status == "disable" {
-			aliyunStatus = "DISABLE"
-		}
-
-		err := dnsService.SetAliyunRecordStatus(recordID, aliyunStatus)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"code": e.ERROR,
-				"msg":  err.Error(),
-				"data": make(map[string]interface{}),
-			})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"code": e.SUCCESS,
-			"msg":  "阿里云DNS记录状态设置成功",
-			"data": make(map[string]interface{}),
-		})
-		return
-	}
-
-	// 使用DNSPod
+	// 使用通用设置记录状态方法
 	err := dnsService.SetRecordStatus(recordID, domainID, status, provider)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -438,4 +311,110 @@ func SetDnsRecordStatus(c *gin.Context) {
 		"msg":  "DNS记录状态设置成功",
 		"data": make(map[string]interface{}),
 	})
+}
+
+// DomainVerificationRequest 域名验证请求
+type DomainVerificationRequest struct {
+	Domain string `json:"domain" binding:"required"`
+	Type   string `json:"type" binding:"required"` // "dns", "file", "cname"
+}
+
+// VerifyDomainChallenge 验证域名挑战
+type VerifyDomainChallenge struct {
+	Domain    string `json:"domain" binding:"required"`
+	Type      string `json:"type" binding:"required"`
+	Challenge string `json:"challenge" binding:"required"`
+}
+
+// GenerateDomainVerificationChallenge 生成域名验证挑战
+func GenerateDomainVerificationChallenge(c *gin.Context) {
+	var json DomainVerificationRequest
+	if err := c.ShouldBindJSON(&json); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": e.ERROR,
+			"msg":  err.Error(),
+			"data": gin.H{},
+		})
+		return
+	}
+
+	// 创建DNS管理器
+	dnsManager := dns.NewDnsManager(
+		setting.DnsPodToken,
+		setting.AliyunAccessKeyId,
+		setting.AliyunAccessKeySecret,
+		setting.AliyunRegionId,
+		setting.VolcengineAccessKeyId,
+		setting.VolcengineAccessKeySecret,
+		setting.VolcengineRegionId,
+	)
+
+	// 创建域名验证服务
+	verificationService := dns.NewDomainVerificationService(dnsManager)
+
+	// 生成验证挑战
+	response, err := verificationService.GenerateChallenge(json.Domain, json.Type)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": e.ERROR,
+			"msg":  err.Error(),
+			"data": gin.H{},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": e.SUCCESS,
+		"msg":  "生成验证挑战成功",
+		"data": response,
+	})
+}
+
+// VerifyDomain 通过挑战验证域名
+func VerifyDomain(c *gin.Context) {
+	var json VerifyDomainChallenge
+	if err := c.ShouldBindJSON(&json); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": e.ERROR,
+			"msg":  err.Error(),
+			"data": gin.H{},
+		})
+		return
+	}
+
+	// 创建DNS管理器
+	dnsManager := dns.NewDnsManager(
+		setting.DnsPodToken,
+		setting.AliyunAccessKeyId,
+		setting.AliyunAccessKeySecret,
+		setting.AliyunRegionId,
+		setting.VolcengineAccessKeyId,
+		setting.VolcengineAccessKeySecret,
+		setting.VolcengineRegionId,
+	)
+
+	// 创建域名验证服务
+	verificationService := dns.NewDomainVerificationService(dnsManager)
+
+	// 执行域名验证
+	response, err := verificationService.VerifyDomain(json.Domain, json.Type, json.Challenge)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": e.ERROR,
+			"msg":  err.Error(),
+			"data": gin.H{},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": e.SUCCESS,
+		"msg":  response.Message,
+		"data": response,
+	})
+}
+
+// isAnyDnsProviderConfigured 检查是否有任何DNS提供商已配置
+func isAnyDnsProviderConfigured() bool {
+	return setting.DnsPodToken != "" || setting.AliyunAccessKeyId != "" || setting.VolcengineAccessKeyId != ""
 }
