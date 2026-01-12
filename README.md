@@ -26,12 +26,11 @@ go build -o server .
 PORT = 8080
 
 [database]
-TYPE = mysql
-USER = root
-PASSWORD = 123456
-HOST = 127.0.0.1:3306
-NAME = blog
-TABLE_PREFIX = blog_
+TYPE = mongodb
+CONNECTION_STRING = mongodb://localhost:2707
+DATABASE = blog
+USERNAME = 
+PASSWORD = 
 
 [app]
 # 默认域名

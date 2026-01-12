@@ -1,64 +1,80 @@
 package models
 
 import (
-	"fmt"
+	"context"
 	"log"
-
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/mysql"
+	"time"
 
 	"github.com/EDDYCJY/go-gin-example/pkg/setting"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var db *gorm.DB
+var db *mongo.Database
+var client *mongo.Client
 
 type Model struct {
-	ID         int `gorm:"primary_key" json:"id"`
-	CreatedOn  int `json:"created_on"`
-	ModifiedOn int `json:"modified_on"`
+	ID         string    `bson:"_id,omitempty" json:"id"`
+	CreatedOn  time.Time `bson:"created_on" json:"created_on"`
+	ModifiedOn time.Time `bson:"modified_on" json:"modified_on"`
 }
 
 func init() {
 	var (
-		err                                               error
-		dbType, dbName, user, password, host, tablePrefix string
+		err      error
+		connStr  string
+		dbName   string
+		username string
+		password string
 	)
 
 	sec, err := setting.Cfg.GetSection("database")
 	if err != nil {
-		log.Fatal(2, "Fail to get section 'database': %v", err)
+		log.Printf("Warning: Fail to get section 'database': %v", err)
+		return
 	}
 
-	dbType = sec.Key("TYPE").String()
-	dbName = sec.Key("NAME").String()
-	user = sec.Key("USER").String()
-	password = sec.Key("PASSWORD").String()
-	host = sec.Key("HOST").String()
-	tablePrefix = sec.Key("TABLE_PREFIX").String()
+	connStr = sec.Key("CONNECTION_STRING").String()
+	dbName = sec.Key("database").String()
+	username = sec.Key("username").String()
+	password = sec.Key("password").String()
 
-	db, err = gorm.Open(dbType, fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True&loc=Local",
-		user,
-		password,
-		host,
-		dbName))
+	// 如果提供了用户名和密码，则添加到连接字符串中
+	if username != "" && password != "" {
+		connStr = "mongodb://" + username + ":" + password + "@" + connStr[10:] // 去掉"mongodb://"前缀再重新拼接
+	}
 
+	// 设置客户端连接选项
+	clientOptions := options.Client().ApplyURI(connStr)
+
+	// 连接到MongoDB
+	client, err = mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
-		log.Println(err)
+		log.Printf("Warning: Failed to connect to MongoDB: %v", err)
+		return
 	}
 
-	gorm.DefaultTableNameHandler = func(db *gorm.DB, defaultTableName string) string {
-		return tablePrefix + defaultTableName
+	// 检查连接
+	err = client.Ping(context.TODO(), nil)
+	if err != nil {
+		log.Printf("Warning: Failed to ping MongoDB: %v", err)
+		return
 	}
 
-	db.SingularTable(true)
-	db.LogMode(true)
-	db.DB().SetMaxIdleConns(10)
-	db.DB().SetMaxOpenConns(100)
+	db = client.Database(dbName)
 
-	// 自动迁移数据库表
-	db.AutoMigrate(&Tag{}, &DnsDomain{}, &DnsRecord{})
+	log.Println("Connected to MongoDB!")
+
+	// 初始化集合（相当于创建表）
+	// 确保集合存在并创建索引
 }
 
 func CloseDB() {
-	defer db.Close()
+	if client != nil {
+		err := client.Disconnect(context.TODO())
+		if err != nil {
+			log.Println("Error disconnecting from MongoDB:", err)
+		}
+	}
+	log.Println("Connection to MongoDB closed.")
 }

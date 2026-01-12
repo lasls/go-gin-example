@@ -9,6 +9,7 @@ import (
 	"github.com/EDDYCJY/go-gin-example/pkg/setting"
 	"github.com/EDDYCJY/go-gin-example/pkg/util"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // 获取域名列表
@@ -100,11 +101,11 @@ func AddDnsDomain(c *gin.Context) {
 
 // 更新域名
 func UpdateDnsDomain(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil || id <= 0 {
+	id := c.Param("id")
+	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": e.INVALID_PARAMS,
-			"msg":  "无效的域名ID",
+			"msg":  "域名ID不能为空",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -150,7 +151,7 @@ func UpdateDnsDomain(c *gin.Context) {
 		updateData["remark"] = remark
 	}
 
-	err = models.UpdateDnsDomain(id, updateData)
+	err := models.UpdateDnsDomain(id, updateData)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
@@ -169,11 +170,11 @@ func UpdateDnsDomain(c *gin.Context) {
 
 // 删除域名
 func DeleteDnsDomain(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil || id <= 0 {
+	id := c.Param("id")
+	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": e.INVALID_PARAMS,
-			"msg":  "无效的域名ID",
+			"msg":  "域名ID不能为空",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -188,7 +189,7 @@ func DeleteDnsDomain(c *gin.Context) {
 		return
 	}
 
-	err = models.DeleteDnsDomain(id)
+	err := models.DeleteDnsDomain(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
@@ -208,13 +209,10 @@ func DeleteDnsDomain(c *gin.Context) {
 // 获取DNS解析记录列表（数据库）
 func GetDnsRecordsDb(c *gin.Context) {
 	domainIDStr := c.Query("domain_id")
-	maps := make(map[string]interface{})
+	maps := bson.M{}
 
 	if domainIDStr != "" {
-		domainID, err := strconv.Atoi(domainIDStr)
-		if err == nil && domainID > 0 {
-			maps["domain_id"] = domainID
-		}
+		maps["domain_id"] = domainIDStr
 	}
 
 	name := c.Query("name")
@@ -262,11 +260,11 @@ func GetDnsRecordsDb(c *gin.Context) {
 
 // 添加DNS解析记录（数据库）
 func AddDnsRecordDb(c *gin.Context) {
-	domainID, err := strconv.Atoi(c.Query("domain_id"))
-	if err != nil || domainID <= 0 {
+	domainID := c.Query("domain_id")
+	if domainID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": e.INVALID_PARAMS,
-			"msg":  "无效的域名ID",
+			"msg":  "域名ID不能为空",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -289,7 +287,7 @@ func AddDnsRecordDb(c *gin.Context) {
 	status := c.DefaultQuery("status", "enable")
 	line := c.DefaultQuery("line", "默认")
 	ttlStr := c.DefaultQuery("ttl", "600")
-	ttl, err := strconv.Atoi(ttlStr)
+	ttl, err := strconv.ParseInt(ttlStr, 10, 64)
 	if err != nil {
 		ttl = 600
 	}
@@ -328,11 +326,11 @@ func AddDnsRecordDb(c *gin.Context) {
 
 // 更新DNS解析记录（数据库）
 func UpdateDnsRecordDb(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil || id <= 0 {
+	id := c.Param("id")
+	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": e.INVALID_PARAMS,
-			"msg":  "无效的DNS记录ID",
+			"msg":  "DNS记录ID不能为空",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -360,9 +358,7 @@ func UpdateDnsRecordDb(c *gin.Context) {
 
 	updateData := make(map[string]interface{})
 	if domainIDStr != "" {
-		if domainID, err := strconv.Atoi(domainIDStr); err == nil && domainID > 0 {
-			updateData["domain_id"] = domainID
-		}
+		updateData["domain_id"] = domainIDStr
 	}
 	if name != "" {
 		updateData["name"] = name
@@ -380,7 +376,7 @@ func UpdateDnsRecordDb(c *gin.Context) {
 		updateData["line"] = line
 	}
 	if ttlStr != "" {
-		if ttl, err := strconv.Atoi(ttlStr); err == nil {
+		if ttl, err := strconv.ParseInt(ttlStr, 10, 64); err == nil {
 			updateData["ttl"] = ttl
 		}
 	}
@@ -394,7 +390,7 @@ func UpdateDnsRecordDb(c *gin.Context) {
 		updateData["remote_id"] = remoteID
 	}
 
-	err = models.UpdateDnsRecord(id, updateData)
+	err := models.UpdateDnsRecord(id, updateData)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
@@ -413,11 +409,11 @@ func UpdateDnsRecordDb(c *gin.Context) {
 
 // 删除DNS解析记录（数据库）
 func DeleteDnsRecordDb(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil || id <= 0 {
+	id := c.Param("id")
+	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": e.INVALID_PARAMS,
-			"msg":  "无效的DNS记录ID",
+			"msg":  "DNS记录ID不能为空",
 			"data": make(map[string]interface{}),
 		})
 		return
@@ -432,7 +428,7 @@ func DeleteDnsRecordDb(c *gin.Context) {
 		return
 	}
 
-	err = models.DeleteDnsRecord(id)
+	err := models.DeleteDnsRecord(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": e.ERROR,
