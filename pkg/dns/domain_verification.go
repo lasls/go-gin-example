@@ -5,10 +5,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/EDDYCJY/go-gin-example/pkg/setting"
 	"github.com/miekg/dns"
 )
 
@@ -216,50 +218,67 @@ func (s *DomainVerificationService) verifyFile(domain, expectedContent string) (
 // queryTXTRecord 查询TXT记录
 func (s *DomainVerificationService) queryTXTRecord(domain string) ([]string, error) {
 	c := new(dns.Client)
+	c.Timeout = 5 * time.Second // 设置超时时间
 	m := new(dns.Msg)
 	m.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
 
-	r, _, err := c.Exchange(m, "8.8.8.8:53") // 使用Google DNS
-	if err != nil {
-		return nil, err
-	}
+	// 使用配置文件中的DNS服务器列表
+	for _, dnsServer := range setting.DnsServers {
+		r, _, err := c.Exchange(m, dnsServer)
+		if err != nil {
+			// 如果当前DNS服务器失败，继续尝试下一个
+			continue
+		}
 
-	if r.Rcode != dns.RcodeSuccess {
-		return nil, fmt.Errorf("DNS查询失败: %s", dns.RcodeToString[r.Rcode])
-	}
+		if r.Rcode != dns.RcodeSuccess {
+			continue
+		}
 
-	var txtRecords []string
-	for _, ans := range r.Answer {
-		if t, ok := ans.(*dns.TXT); ok {
-			txtRecords = append(txtRecords, strings.Join(t.Txt, " "))
+		var txtRecords []string
+		for _, ans := range r.Answer {
+			if t, ok := ans.(*dns.TXT); ok {
+				txtRecords = append(txtRecords, strings.Join(t.Txt, " "))
+			}
+		}
+
+		// 如果找到了记录，返回结果
+		if len(txtRecords) > 0 {
+			return txtRecords, nil
 		}
 	}
 
-	return txtRecords, nil
+	return nil, fmt.Errorf("所有DNS服务器都无法查询到TXT记录")
 }
 
 // queryCNAMERecord 查询CNAME记录
 func (s *DomainVerificationService) queryCNAMERecord(domain string) (string, error) {
 	c := new(dns.Client)
+	c.Timeout = 5 * time.Second // 设置超时时间
 	m := new(dns.Msg)
 	m.SetQuestion(dns.Fqdn(domain), dns.TypeCNAME)
 
-	r, _, err := c.Exchange(m, "8.8.8.8:53") // 使用Google DNS
-	if err != nil {
-		return "", err
-	}
+	// 使用配置文件中的DNS服务器列表
+	for _, dnsServer := range setting.DnsServers {
+		r, _, err := c.Exchange(m, dnsServer)
+		if err != nil {
+			// 打印错误日志
+			log.Printf("DNS服务器 %s 查询CNAME记录失败: %v", dnsServer, err)
+			// 如果当前DNS服务器失败，继续尝试下一个
+			continue
+		}
 
-	if r.Rcode != dns.RcodeSuccess {
-		return "", fmt.Errorf("DNS查询失败: %s", dns.RcodeToString[r.Rcode])
-	}
+		if r.Rcode != dns.RcodeSuccess {
+			continue
+		}
 
-	for _, ans := range r.Answer {
-		if c, ok := ans.(*dns.CNAME); ok {
-			return c.Target, nil
+		for _, ans := range r.Answer {
+			if c, ok := ans.(*dns.CNAME); ok {
+				return c.Target, nil
+			}
 		}
 	}
 
-	return "", fmt.Errorf("未找到CNAME记录")
+	return "", fmt.Errorf("所有DNS服务器都无法查询到CNAME记录")
 }
 
 // fetchFileContent 获取文件内容

@@ -2,6 +2,7 @@ package setting
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"github.com/go-ini/ini"
@@ -32,6 +33,9 @@ var (
 	VolcengineAccessKeyId     string
 	VolcengineAccessKeySecret string
 	VolcengineRegionId        string
+
+	// DNS服务器配置
+	DnsServers []string
 )
 
 func init() {
@@ -47,6 +51,7 @@ func init() {
 	LoadDns()
 	LoadAliyunDns()
 	LoadVolcengineDns()
+	LoadDnsServers()
 }
 
 func LoadBase() {
@@ -104,4 +109,22 @@ func LoadVolcengineDns() {
 	VolcengineAccessKeyId = sec.Key("VOLCENGINE_ACCESS_KEY_ID").MustString("")
 	VolcengineAccessKeySecret = sec.Key("VOLCENGINE_ACCESS_KEY_SECRET").MustString("")
 	VolcengineRegionId = sec.Key("VOLCENGINE_REGION_ID").MustString("cn-north-1")
+}
+
+func LoadDnsServers() {
+	sec, err := Cfg.GetSection("dns_servers")
+	if err != nil {
+		log.Printf("Fail to get section 'dns_servers': %v", err)
+		// 设置默认值
+		DnsServers = []string{"8.8.8.8:53", "8.8.4.4:53", "223.5.5.5:53", "1.1.1.1:53", "114.114.114.114:53"}
+		return
+	}
+
+	// 从配置中读取DNS服务器列表
+	dnsServersStr := sec.Key("DNS_SERVERS").MustString("8.8.8.8:53,8.8.4.4:53,223.5.5.5:53,1.1.1.1:53,114.114.114.114:53")
+	DnsServers = strings.Split(dnsServersStr, ",")
+	// 清理每个服务器地址的空白字符
+	for i, server := range DnsServers {
+		DnsServers[i] = strings.TrimSpace(server)
+	}
 }

@@ -49,9 +49,32 @@ ALIYUN_REGION_ID = cn-hangzhou
 VOLCENGINE_ACCESS_KEY_ID = your_volcengine_access_key_id
 VOLCENGINE_ACCESS_KEY_SECRET = your_volcengine_access_key_secret
 VOLCENGINE_REGION_ID = cn-beijing
+
+[dns_servers]
+# DNS服务器列表，支持多个DNS服务器，以逗号分隔
+DNS_SERVERS = 8.8.8.8:53,8.8.4.4:53,223.5.5.5:53,1.1.1.1:53,114.114.114.114:53
 ```
 
 ## API接口
+
+### DNS服务器配置
+
+域名验证功能支持多DNS服务器配置，系统会自动轮询配置的DNS服务器进行查询，提高查询的可靠性和可用性。
+
+在 `conf/app.ini` 中配置多个DNS服务器：
+
+```ini
+[dns_servers]
+DNS_SERVERS = 8.8.8.8:53,8.8.4.4:53,223.5.5.5:53,1.1.1.1:53,114.114.114.114:53
+```
+
+系统支持以下常用的公共DNS服务器：
+- Google DNS: 8.8.8.8:53, 8.8.4.4:53
+- 阿里云DNS: 223.5.5.5:53
+- Cloudflare DNS: 1.1.1.1:53
+- 114 DNS: 114.114.114.114:53
+
+当某个DNS服务器无法访问时，系统会自动尝试下一个DNS服务器，确保域名验证功能的可靠性。
 
 ### 域名验证接口
 
